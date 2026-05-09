@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f4ee">
+  <title>体調メモ</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">毎日の記録</p>
+      <h1>体調メモ</h1>
+    </div>
+    <button id="installButton" class="icon-button hidden" type="button" title="ホーム画面に追加">＋</button>
+  </header>
+
+  <nav class="tabs" aria-label="画面切り替え">
+    <button class="tab active" data-view="entry" type="button">入力</button>
+    <button class="tab" data-view="history" type="button">過去記録</button>
+    <button class="tab" data-view="month" type="button">月まとめ</button>
+    <button class="tab" data-view="doctor" type="button">受診用</button>
+    <button class="tab" data-view="settings" type="button">設定</button>
+  </nav>
+
+  <main>
+    <section id="entry" class="view active">
+      <div class="panel">
+        <div class="panel-title-row">
+          <h2>今日の記録</h2>
+          <button id="voiceButton" class="primary" type="button">音声入力</button>
+        </div>
+        <label>
+          日時
+          <input id="entryDate" type="datetime-local">
+        </label>
+        <div class="weather-row">
+          <label>
+            気象状況
+            <input id="entryWeather" type="text" placeholder="例：曇り">
+          </label>
+          <label>
+            気温
+            <input id="entryTemperature" inputmode="decimal" type="number" step="0.1" placeholder="℃">
+          </label>
+          <button id="weatherButton" type="button">現在の天気を取得</button>
+        </div>
+        <label>
+          話した内容・メモ
+          <textarea id="entryText" rows="7" placeholder="例：今日は頭痛が強く、頭痛7 腰4 足2 耳鳴り5 です"></textarea>
+        </label>
+        <div class="score-grid">
+          <label><span data-symptom-label="headache">頭痛</span> <input id="scoreHeadache" inputmode="numeric" type="number" min="0" max="10"></label>
+          <label><span data-symptom-label="back">腰</span> <input id="scoreBack" inputmode="numeric" type="number" min="0" max="10"></label>
+          <label><span data-symptom-label="leg">足</span> <input id="scoreLeg" inputmode="numeric" type="number" min="0" max="10"></label>
+          <label><span data-symptom-label="tinnitus">耳鳴り</span> <input id="scoreTinnitus" inputmode="numeric" type="number" min="0" max="10"></label>
+          <label><span data-symptom-label="hand">手</span> <input id="scoreHand" inputmode="numeric" type="number" min="0" max="10"></label>
+          <label><span data-symptom-label="sleep">睡眠</span> <input id="scoreSleep" inputmode="numeric" type="number" min="0" max="10" placeholder="悪さ"></label>
+        </div>
+        <div class="actions">
+          <button id="cancelEditButton" class="hidden" type="button">訂正をやめる</button>
+          <button id="extractButton" type="button">文章から点数を拾う</button>
+          <button id="saveButton" class="primary" type="button">保存</button>
+        </div>
+        <p id="voiceStatus" class="status"></p>
+      </div>
+
+      <div class="panel">
+        <h2>これまでのテキストを取り込む</h2>
+        <label>
+          体調ログを貼り付け
+          <textarea id="importText" rows="8" placeholder="体調ログ.txt の内容をここに貼り付け"></textarea>
+        </label>
+        <label>
+          CSV/TXTファイルを選ぶ
+          <input id="importFile" type="file" accept=".csv,.txt,text/csv,text/plain">
+        </label>
+        <div class="actions">
+          <button id="importButton" class="primary" type="button">取り込む</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title-row">
+          <h2>最近の記録</h2>
+          <button id="exportButton" type="button">CSV保存</button>
+        </div>
+        <div id="recentList" class="log-list"></div>
+      </div>
+
+    </section>
+
+    <section id="history" class="view">
+      <div class="panel">
+        <div class="panel-title-row">
+          <h2>過去の記録</h2>
+          <div class="button-group">
+            <button id="historyExportButton" type="button">CSV保存</button>
+            <button id="clearHistoryFilterButton" type="button">絞り込み解除</button>
+          </div>
+        </div>
+        <div class="history-controls">
+          <label>
+            開始日
+            <input id="historyStartDate" type="date">
+          </label>
+          <label>
+            終了日
+            <input id="historyEndDate" type="date">
+          </label>
+          <label>
+            並び替え
+            <select id="historySort">
+              <option value="dateDesc">日付 新しい順</option>
+              <option value="dateAsc">日付 古い順</option>
+              <option value="headacheDesc">頭痛 高い順</option>
+              <option value="headacheAsc">頭痛 低い順</option>
+              <option value="backDesc">腰 高い順</option>
+              <option value="backAsc">腰 低い順</option>
+              <option value="legDesc">足 高い順</option>
+              <option value="legAsc">足 低い順</option>
+              <option value="tinnitusDesc">耳鳴り 高い順</option>
+              <option value="tinnitusAsc">耳鳴り 低い順</option>
+              <option value="handDesc">手 高い順</option>
+              <option value="handAsc">手 低い順</option>
+              <option value="sleepDesc">睡眠 高い順</option>
+              <option value="sleepAsc">睡眠 低い順</option>
+            </select>
+          </label>
+        </div>
+        <p id="historyCount" class="status"></p>
+        <div id="historyList" class="log-list"></div>
+      </div>
+    </section>
+
+    <section id="month" class="view">
+      <div class="panel">
+        <div class="panel-title-row">
+          <h2>月ごとのまとめ</h2>
+          <input id="monthPicker" type="month">
+        </div>
+        <div id="summaryCards" class="summary-grid"></div>
+        <canvas id="chart" width="900" height="440" aria-label="症状スコアのグラフ"></canvas>
+      </div>
+      <div class="panel">
+        <h2>日別メモ</h2>
+        <div id="monthList" class="log-list"></div>
+      </div>
+    </section>
+
+    <section id="doctor" class="view">
+      <div class="panel report-panel">
+        <div class="panel-title-row no-print">
+          <h2>受診時に見せるまとめ</h2>
+          <button id="printButton" class="primary" type="button">印刷・PDF</button>
+        </div>
+        <div class="date-range no-print" aria-label="受診用データの期間">
+          <label>
+            開始日
+            <input id="doctorStartDate" type="date">
+          </label>
+          <label>
+            終了日
+            <input id="doctorEndDate" type="date">
+          </label>
+        </div>
+        <div id="doctorReport" class="doctor-report"></div>
+      </div>
+    </section>
+
+    <section id="settings" class="view">
+      <div class="panel">
+        <h2>項目名の設定</h2>
+        <div class="settings-grid">
+          <label>項目1 <input data-setting-label="headache" type="text"></label>
+          <label>項目2 <input data-setting-label="back" type="text"></label>
+          <label>項目3 <input data-setting-label="leg" type="text"></label>
+          <label>項目4 <input data-setting-label="tinnitus" type="text"></label>
+          <label>項目5 <input data-setting-label="hand" type="text"></label>
+          <label>項目6 <input data-setting-label="sleep" type="text"></label>
+        </div>
+        <div class="actions">
+          <button id="resetLabelsButton" type="button">標準に戻す</button>
+          <button id="saveLabelsButton" class="primary" type="button">設定を保存</button>
+        </div>
+        <p id="settingsStatus" class="status"></p>
+      </div>
+
+      <div class="panel danger-zone">
+        <h2>過去データの削除</h2>
+        <div class="date-range">
+          <label>
+            開始日
+            <input id="deleteStartDate" type="date">
+          </label>
+          <label>
+            終了日
+            <input id="deleteEndDate" type="date">
+          </label>
+        </div>
+        <div class="actions">
+          <button id="deleteHistoryRangeButton" class="danger" type="button">指定範囲を削除</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
