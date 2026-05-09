@@ -1,5 +1,6 @@
 const STORAGE_KEY = "healthVoiceLog.v1";
-const symptoms = [
+const LABELS_KEY = "healthVoiceLog.labels.v1";
+const defaultSymptoms = [
   { key: "headache", label: "頭痛", color: "#e60000", aliases: ["頭痛", "頭"] },
   { key: "back", label: "腰", color: "#0057ff", aliases: ["腰", "腰の痛み"] },
   { key: "leg", label: "足", color: "#00a000", aliases: ["足", "足の痛み"] },
@@ -7,6 +8,7 @@ const symptoms = [
   { key: "hand", label: "手", color: "#ff8c00", aliases: ["手", "手の痛み", "手のしびれ", "左腕のしびれ"] },
   { key: "sleep", label: "睡眠の悪さ", color: "#111111", aliases: ["眠れない", "眠りが浅い", "寝づらい"] }
 ];
+const symptoms = loadSymptomLabels();
 
 const fields = {
   date: document.querySelector("#entryDate"),
@@ -23,7 +25,8 @@ const fields = {
   deleteEnd: document.querySelector("#deleteEndDate"),
   doctorStart: document.querySelector("#doctorStartDate"),
   doctorEnd: document.querySelector("#doctorEndDate"),
-  status: document.querySelector("#voiceStatus")
+  status: document.querySelector("#voiceStatus"),
+  settingsStatus: document.querySelector("#settingsStatus")
 };
 
 const scoreInputs = {
@@ -45,6 +48,8 @@ function init() {
   fields.date.value = toLocalInputValue(new Date());
   fields.month.value = currentMonth();
   setDefaultDoctorRange();
+  renderSettings();
+  applySymptomLabels();
   bindTabs();
   bindActions();
   renderAll();
@@ -77,6 +82,8 @@ function bindActions() {
   document.querySelector("#deleteHistoryRangeButton").addEventListener("click", deleteHistoryRange);
   document.querySelector("#printButton").addEventListener("click", () => window.print());
   document.querySelector("#weatherButton").addEventListener("click", fetchCurrentWeather);
+  document.querySelector("#saveLabelsButton").addEventListener("click", saveSymptomLabelSettings);
+  document.querySelector("#resetLabelsButton").addEventListener("click", resetSymptomLabelSettings);
   document.querySelector("#clearHistoryFilterButton").addEventListener("click", clearHistoryFilters);
   fields.month.addEventListener("change", renderAll);
   fields.historyStart.addEventListener("change", renderHistory);
@@ -101,6 +108,70 @@ function bindActions() {
     deferredInstallPrompt.prompt();
     deferredInstallPrompt = null;
     document.querySelector("#installButton").classList.add("hidden");
+  });
+}
+
+function loadSymptomLabels() {
+  let saved = {};
+  try {
+    saved = JSON.parse(localStorage.getItem(LABELS_KEY) || "{}");
+  } catch {
+    saved = {};
+  }
+  return defaultSymptoms.map(symptom => ({
+    ...symptom,
+    label: saved[symptom.key] || symptom.label
+  }));
+}
+
+function renderSettings() {
+  symptoms.forEach(symptom => {
+    const input = document.querySelector(`[data-setting-label="${symptom.key}"]`);
+    if (input) input.value = symptom.label;
+  });
+}
+
+function saveSymptomLabelSettings() {
+  const labels = {};
+  symptoms.forEach(symptom => {
+    const input = document.querySelector(`[data-setting-label="${symptom.key}"]`);
+    const label = input && input.value.trim() ? input.value.trim() : defaultSymptoms.find(item => item.key === symptom.key).label;
+    symptom.label = label;
+    labels[symptom.key] = label;
+  });
+  localStorage.setItem(LABELS_KEY, JSON.stringify(labels));
+  applySymptomLabels();
+  renderAll();
+  fields.settingsStatus.textContent = "項目名を保存しました。";
+}
+
+function resetSymptomLabelSettings() {
+  localStorage.removeItem(LABELS_KEY);
+  symptoms.forEach(symptom => {
+    const standard = defaultSymptoms.find(item => item.key === symptom.key);
+    symptom.label = standard.label;
+  });
+  renderSettings();
+  applySymptomLabels();
+  renderAll();
+  fields.settingsStatus.textContent = "標準の項目名に戻しました。";
+}
+
+function applySymptomLabels() {
+  symptoms.forEach(symptom => {
+    document.querySelectorAll(`[data-symptom-label="${symptom.key}"]`).forEach(element => {
+      element.textContent = symptom.label;
+    });
+  });
+  updateHistorySortLabels();
+}
+
+function updateHistorySortLabels() {
+  symptoms.forEach(symptom => {
+    const desc = fields.historySort.querySelector(`option[value="${symptom.key}Desc"]`);
+    const asc = fields.historySort.querySelector(`option[value="${symptom.key}Asc"]`);
+    if (desc) desc.textContent = `${symptom.label} 高い順`;
+    if (asc) asc.textContent = `${symptom.label} 低い順`;
   });
 }
 
@@ -713,15 +784,14 @@ function drawDateLabels(ctx, sorted, xFor, pad, height, legendY) {
   ctx.strokeStyle = "#bdb5aa";
   ctx.fillStyle = "#24211c";
   ctx.lineWidth = 1;
+  ctx.setLineDash([6, 6]);
   ctx.font = "16px sans-serif";
   ctx.textAlign = "center";
   const usedDays = new Set();
   sorted.forEach((entry, index) => {
     const date = new Date(entry.date);
-    const day = date.getDate();
-    const labelDay = Math.floor((day - 1) / 10) * 10 + 1;
-    const key = `${date.getFullYear()}-${date.getMonth()}-${labelDay}`;
-    if (day !== labelDay || usedDays.has(key)) return;
+    const key = toDateInputValue(date);
+    if (date.getDay() !== 0 || usedDays.has(key)) return;
     usedDays.add(key);
     const x = xFor(index);
     const y = pad.top + height;
@@ -729,7 +799,9 @@ function drawDateLabels(ctx, sorted, xFor, pad, height, legendY) {
     ctx.moveTo(x, pad.top);
     ctx.lineTo(x, y + 8);
     ctx.stroke();
-    ctx.fillText(`${date.getMonth() + 1}/${day}`, x, Math.min(y + 28, legendY - 18));
+    ctx.setLineDash([]);
+    ctx.fillText(`${date.getMonth() + 1}/${date.getDate()}`, x, Math.min(y + 28, legendY - 18));
+    ctx.setLineDash([6, 6]);
   });
   ctx.restore();
 }

@@ -22,6 +22,7 @@
     <button class="tab" data-view="history" type="button">過去記録</button>
     <button class="tab" data-view="month" type="button">月まとめ</button>
     <button class="tab" data-view="doctor" type="button">受診用</button>
+    <button class="tab" data-view="settings" type="button">設定</button>
   </nav>
 
   <main>
@@ -51,12 +52,12 @@
           <textarea id="entryText" rows="7" placeholder="例：今日は頭痛が強く、頭痛7 腰4 足2 耳鳴り5 です"></textarea>
         </label>
         <div class="score-grid">
-          <label>頭痛 <input id="scoreHeadache" inputmode="numeric" type="number" min="0" max="10"></label>
-          <label>腰 <input id="scoreBack" inputmode="numeric" type="number" min="0" max="10"></label>
-          <label>足 <input id="scoreLeg" inputmode="numeric" type="number" min="0" max="10"></label>
-          <label>耳鳴り <input id="scoreTinnitus" inputmode="numeric" type="number" min="0" max="10"></label>
-          <label>手 <input id="scoreHand" inputmode="numeric" type="number" min="0" max="10"></label>
-          <label>睡眠 <input id="scoreSleep" inputmode="numeric" type="number" min="0" max="10" placeholder="悪さ"></label>
+          <label><span data-symptom-label="headache">頭痛</span> <input id="scoreHeadache" inputmode="numeric" type="number" min="0" max="10"></label>
+          <label><span data-symptom-label="back">腰</span> <input id="scoreBack" inputmode="numeric" type="number" min="0" max="10"></label>
+          <label><span data-symptom-label="leg">足</span> <input id="scoreLeg" inputmode="numeric" type="number" min="0" max="10"></label>
+          <label><span data-symptom-label="tinnitus">耳鳴り</span> <input id="scoreTinnitus" inputmode="numeric" type="number" min="0" max="10"></label>
+          <label><span data-symptom-label="hand">手</span> <input id="scoreHand" inputmode="numeric" type="number" min="0" max="10"></label>
+          <label><span data-symptom-label="sleep">睡眠</span> <input id="scoreSleep" inputmode="numeric" type="number" min="0" max="10" placeholder="悪さ"></label>
         </div>
         <div class="actions">
           <button id="cancelEditButton" class="hidden" type="button">訂正をやめる</button>
@@ -89,22 +90,6 @@
         <div id="recentList" class="log-list"></div>
       </div>
 
-      <div class="panel danger-zone">
-        <h2>過去データの削除</h2>
-        <div class="date-range">
-          <label>
-            開始日
-            <input id="deleteStartDate" type="date">
-          </label>
-          <label>
-            終了日
-            <input id="deleteEndDate" type="date">
-          </label>
-        </div>
-        <div class="actions">
-          <button id="deleteHistoryRangeButton" class="danger" type="button">指定範囲を削除</button>
-        </div>
-      </div>
     </section>
 
     <section id="history" class="view">
@@ -182,6 +167,42 @@
           </label>
         </div>
         <div id="doctorReport" class="doctor-report"></div>
+      </div>
+    </section>
+
+    <section id="settings" class="view">
+      <div class="panel">
+        <h2>項目名の設定</h2>
+        <div class="settings-grid">
+          <label>項目1 <input data-setting-label="headache" type="text"></label>
+          <label>項目2 <input data-setting-label="back" type="text"></label>
+          <label>項目3 <input data-setting-label="leg" type="text"></label>
+          <label>項目4 <input data-setting-label="tinnitus" type="text"></label>
+          <label>項目5 <input data-setting-label="hand" type="text"></label>
+          <label>項目6 <input data-setting-label="sleep" type="text"></label>
+        </div>
+        <div class="actions">
+          <button id="resetLabelsButton" type="button">標準に戻す</button>
+          <button id="saveLabelsButton" class="primary" type="button">設定を保存</button>
+        </div>
+        <p id="settingsStatus" class="status"></p>
+      </div>
+
+      <div class="panel danger-zone">
+        <h2>過去データの削除</h2>
+        <div class="date-range">
+          <label>
+            開始日
+            <input id="deleteStartDate" type="date">
+          </label>
+          <label>
+            終了日
+            <input id="deleteEndDate" type="date">
+          </label>
+        </div>
+        <div class="actions">
+          <button id="deleteHistoryRangeButton" class="danger" type="button">指定範囲を削除</button>
+        </div>
       </div>
     </section>
   </main>
