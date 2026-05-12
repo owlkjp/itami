@@ -96,7 +96,10 @@ function bindActions() {
   fields.doctorStart.addEventListener("change", renderDoctorReport);
   fields.doctorEnd.addEventListener("change", renderDoctorReport);
   fields.text.addEventListener("input", () => fillScores(extractScores(fields.text.value), false));
-  document.querySelector("#voiceButton").addEventListener("click", startVoiceInput);
+  const voiceButton = document.querySelector("#voiceButton");
+  if (voiceButton) voiceButton.addEventListener("click", startVoiceInput);
+  const voiceStopButton = getVoiceStopButton();
+  if (voiceStopButton) voiceStopButton.addEventListener("click", stopVoiceInput);
 
   window.addEventListener("beforeinstallprompt", event => {
     event.preventDefault();
@@ -205,26 +208,54 @@ function saveEntry() {
 }
 
 let activeRecognition = null;
+let stopVoiceRequested = false;
+
+function getVoiceStopButton() {
+  const voiceButton = document.querySelector("#voiceButton");
+  if (!voiceButton) return null;
+  let stopButton = document.querySelector("#voiceStopButton");
+  if (!stopButton) {
+    stopButton = document.createElement("button");
+    stopButton.type = "button";
+    stopButton.id = "voiceStopButton";
+    stopButton.textContent = "停止";
+    stopButton.className = voiceButton.className;
+    stopButton.classList.remove("primary");
+    stopButton.classList.add("danger");
+    stopButton.setAttribute("aria-label", "音声入力を停止");
+    voiceButton.insertAdjacentElement("afterend", stopButton);
+  }
+  stopButton.hidden = true;
+  return stopButton;
+}
 
 function setVoiceButtonState(listening) {
-  const btn = document.querySelector("#voiceButton");
-  if (!btn) return;
-  btn.textContent = listening ? "停止" : "音声入力";
-  btn.classList.toggle("danger", listening);
-  btn.classList.toggle("primary", !listening);
+  const voiceButton = document.querySelector("#voiceButton");
+  const stopButton = getVoiceStopButton();
+  if (voiceButton) {
+    voiceButton.textContent = listening ? "音声入力中" : "音声入力";
+    voiceButton.disabled = listening;
+    voiceButton.classList.toggle("primary", !listening);
+  }
+  if (stopButton) {
+    stopButton.hidden = !listening;
+    stopButton.disabled = !listening;
+  }
 }
 
 function stopVoiceInput() {
-  if (activeRecognition) {
-    try { activeRecognition.stop(); } catch (_) {}
+  if (!activeRecognition) return;
+  stopVoiceRequested = true;
+  setStatus("音声入力を停止しています。");
+  try {
+    activeRecognition.stop();
+  } catch (_) {
+    try { activeRecognition.abort(); } catch (_) {}
   }
 }
 
 function startVoiceInput() {
-  if (activeRecognition) {
-    stopVoiceInput();
-    return;
-  }
+  if (activeRecognition) return;
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
     setStatus("このブラウザでは音声入力が使えません。iPhoneのキーボードのマイクボタンでも入力できます。");
@@ -236,24 +267,29 @@ function startVoiceInput() {
   recognition.interimResults = true;
   recognition.continuous = true;
 
-  // 既存テキストを一度だけ確定。以降は baseText + finalText + interim で毎回書き換えて重複を防ぐ。
+  // 既存テキストを一度だけ確定し、認識結果は resultIndex ではなく結果番号ごとに上書きして重複を防ぐ。
   const baseText = fields.text.value;
   const separator = baseText && !baseText.endsWith("\n") ? "\n" : "";
+  const finalSegments = [];
   let finalText = "";
 
   const compose = (interim) => {
-    const spoken = (finalText + interim).trim();
+    const spoken = cleanSpeechText(finalText + interim).trim();
     fields.text.value = spoken ? baseText + separator + spoken : baseText;
     fillScores(extractScores(fields.text.value), false);
   };
 
   recognition.onresult = event => {
     let interim = "";
-    for (let i = event.resultIndex; i < event.results.length; i += 1) {
-      const transcript = event.results[i][0].transcript;
-      if (event.results[i].isFinal) finalText += transcript;
-      else interim += transcript;
+    for (let i = 0; i < event.results.length; i += 1) {
+      const transcript = cleanSpeechText(event.results[i][0].transcript);
+      if (event.results[i].isFinal) {
+        finalSegments[i] = transcript;
+      } else if (i >= event.resultIndex) {
+        interim += transcript;
+      }
     }
+    finalText = finalSegments.filter(Boolean).join("");
     compose(interim);
   };
   recognition.onerror = e => {
@@ -261,21 +297,57 @@ function startVoiceInput() {
     setStatus("音声入力でエラーが発生しました。マイクの許可を確認してください。");
   };
   recognition.onend = () => {
+    const wasStopped = stopVoiceRequested;
     activeRecognition = null;
+    stopVoiceRequested = false;
     setVoiceButtonState(false);
     compose("");
-    setStatus("音声入力が終わりました。必要なら保存してください。");
+    setStatus(wasStopped ? "音声入力を停止しました。必要なら保存してください。" : "音声入力が終わりました。必要なら保存してください。");
   };
 
   activeRecognition = recognition;
+  stopVoiceRequested = false;
   setVoiceButtonState(true);
   setStatus("聞き取り中です。終わったら『停止』を押してください。");
   try {
     recognition.start();
   } catch (_) {
     activeRecognition = null;
+    stopVoiceRequested = false;
     setVoiceButtonState(false);
   }
+}
+
+function cleanSpeechText(value) {
+  let text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  text = collapseKnownRepeatedTerms(text);
+  return collapseExactRepeatedText(text);
+}
+
+function collapseKnownRepeatedTerms(value) {
+  const terms = symptoms
+    .flatMap(symptom => [symptom.label, ...symptom.aliases])
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+  return terms.reduce((text, term) => {
+    const escaped = escapeRegExp(term);
+    return text.replace(new RegExp(`${escaped}(?:\\s*${escaped})+`, "g"), term);
+  }, value);
+}
+
+function collapseExactRepeatedText(value) {
+  const compact = value.replace(/\s+/g, "");
+  for (let size = 1; size <= Math.floor(compact.length / 2); size += 1) {
+    if (compact.length % size !== 0) continue;
+    const part = compact.slice(0, size);
+    if (part && part.repeat(compact.length / size) === compact) return part;
+  }
+  return value;
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function fetchCurrentWeather() {
