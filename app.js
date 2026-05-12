@@ -204,7 +204,27 @@ function saveEntry() {
   renderAll();
 }
 
+let activeRecognition = null;
+
+function setVoiceButtonState(listening) {
+  const btn = document.querySelector("#voiceButton");
+  if (!btn) return;
+  btn.textContent = listening ? "停止" : "音声入力";
+  btn.classList.toggle("danger", listening);
+  btn.classList.toggle("primary", !listening);
+}
+
+function stopVoiceInput() {
+  if (activeRecognition) {
+    try { activeRecognition.stop(); } catch (_) {}
+  }
+}
+
 function startVoiceInput() {
+  if (activeRecognition) {
+    stopVoiceInput();
+    return;
+  }
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
     setStatus("このブラウザでは音声入力が使えません。iPhoneのキーボードのマイクボタンでも入力できます。");
@@ -214,9 +234,19 @@ function startVoiceInput() {
   const recognition = new SpeechRecognition();
   recognition.lang = "ja-JP";
   recognition.interimResults = true;
-  recognition.continuous = false;
+  recognition.continuous = true;
+
+  // 既存テキストを一度だけ確定。以降は baseText + finalText + interim で毎回書き換えて重複を防ぐ。
+  const baseText = fields.text.value;
+  const separator = baseText && !baseText.endsWith("\n") ? "\n" : "";
   let finalText = "";
-  setStatus("聞き取り中です。話し終えたら少し待ってください。");
+
+  const compose = (interim) => {
+    const spoken = (finalText + interim).trim();
+    fields.text.value = spoken ? baseText + separator + spoken : baseText;
+    fillScores(extractScores(fields.text.value), false);
+  };
+
   recognition.onresult = event => {
     let interim = "";
     for (let i = event.resultIndex; i < event.results.length; i += 1) {
@@ -224,12 +254,28 @@ function startVoiceInput() {
       if (event.results[i].isFinal) finalText += transcript;
       else interim += transcript;
     }
-    fields.text.value = [fields.text.value, finalText || interim].filter(Boolean).join(fields.text.value ? "\n" : "");
-    fillScores(extractScores(fields.text.value), false);
+    compose(interim);
   };
-  recognition.onerror = () => setStatus("音声入力を開始できませんでした。Safariのマイク許可を確認してください。");
-  recognition.onend = () => setStatus("音声入力が終わりました。必要なら保存してください。");
-  recognition.start();
+  recognition.onerror = e => {
+    if (e && e.error === "no-speech") return;
+    setStatus("音声入力でエラーが発生しました。マイクの許可を確認してください。");
+  };
+  recognition.onend = () => {
+    activeRecognition = null;
+    setVoiceButtonState(false);
+    compose("");
+    setStatus("音声入力が終わりました。必要なら保存してください。");
+  };
+
+  activeRecognition = recognition;
+  setVoiceButtonState(true);
+  setStatus("聞き取り中です。終わったら『停止』を押してください。");
+  try {
+    recognition.start();
+  } catch (_) {
+    activeRecognition = null;
+    setVoiceButtonState(false);
+  }
 }
 
 async function fetchCurrentWeather() {
