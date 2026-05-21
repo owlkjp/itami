@@ -41,6 +41,10 @@ const scoreInputs = {
 let entries = loadEntries();
 let deferredInstallPrompt = null;
 let editingEntryId = null;
+let activeRecognition = null;
+let stopVoiceRequested = false;
+let keepVoiceListening = false;
+let voiceRestartTimer = null;
 
 init();
 
@@ -236,9 +240,6 @@ function saveEntry() {
   renderAll();
 }
 
-let activeRecognition = null;
-let stopVoiceRequested = false;
-
 function getVoiceStopButton() {
   let stopButton = document.querySelector("#voiceStopButton");
   if (!stopButton) {
@@ -260,6 +261,7 @@ function getVoiceStopButton() {
 function setVoiceButtonState(listening) {
   const voiceButton = document.querySelector("#voiceButton");
   const stopButton = getVoiceStopButton();
+  const banner = document.querySelector("#voiceBanner");
   if (voiceButton) {
     voiceButton.textContent = listening ? "音声入力中" : "音声入力";
     voiceButton.disabled = listening;
@@ -270,11 +272,24 @@ function setVoiceButtonState(listening) {
     stopButton.classList.toggle("hidden", !listening);
     stopButton.disabled = !listening;
   }
+  if (banner) {
+    banner.classList.toggle("hidden", !listening);
+    banner.textContent = listening ? "録音中  停止するまで待機します" : "録音中";
+  }
 }
 
 function stopVoiceInput() {
-  if (!activeRecognition) return;
+  keepVoiceListening = false;
   stopVoiceRequested = true;
+  if (voiceRestartTimer) {
+    clearTimeout(voiceRestartTimer);
+    voiceRestartTimer = null;
+  }
+  if (!activeRecognition) {
+    setVoiceButtonState(false);
+    setStatus("音声入力を停止しました。必要なら保存してください。");
+    return;
+  }
   setStatus("音声入力を停止しています。");
   try {
     activeRecognition.stop();
@@ -285,6 +300,10 @@ function stopVoiceInput() {
 
 function startVoiceInput() {
   if (activeRecognition) return;
+  if (voiceRestartTimer) {
+    clearTimeout(voiceRestartTimer);
+    voiceRestartTimer = null;
+  }
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
     setStatus("このブラウザでは音声入力が使えません。iPhoneのキーボードのマイクボタンでも入力できます。");
@@ -328,16 +347,27 @@ function startVoiceInput() {
   recognition.onend = () => {
     const wasStopped = stopVoiceRequested;
     activeRecognition = null;
-    stopVoiceRequested = false;
-    setVoiceButtonState(false);
     compose("");
+    if (keepVoiceListening && !wasStopped) {
+      setVoiceButtonState(true);
+      setStatus("音声入力を待機中です。話し始めると再開します。終わる時は停止を押してください。");
+      voiceRestartTimer = setTimeout(() => {
+        voiceRestartTimer = null;
+        if (keepVoiceListening && !activeRecognition) startVoiceInput();
+      }, 1200);
+      return;
+    }
+    stopVoiceRequested = false;
+    keepVoiceListening = false;
+    setVoiceButtonState(false);
     setStatus(wasStopped ? "音声入力を停止しました。必要なら保存してください。" : "音声入力が終わりました。必要なら保存してください。");
   };
 
   activeRecognition = recognition;
   stopVoiceRequested = false;
+  keepVoiceListening = true;
   setVoiceButtonState(true);
-  setStatus("聞き取り中です。終わったら『停止』を押してください。");
+  setStatus("録音中です。終わったら『停止』を押してください。");
   try {
     recognition.start();
   } catch (_) {

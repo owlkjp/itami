@@ -1,4 +1,4 @@
-const CACHE_NAME = "health-voice-log-v2";
+const CACHE_NAME = "health-voice-log-v3";
 const ASSETS = [
   "./",
   "./index.html",
