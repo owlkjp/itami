@@ -1,6 +1,6 @@
 const STORAGE_KEY = "healthVoiceLog.v1";
 const LABELS_KEY = "healthVoiceLog.labels.v1";
-const APP_VERSION = "v4.1";
+const APP_VERSION = "v4.2";
 const defaultSymptoms = [
   { key: "headache", label: "頭痛", color: "#e60000", aliases: ["頭痛", "頭"] },
   { key: "back", label: "腰", color: "#0057ff", aliases: ["腰", "腰の痛み"] },
@@ -351,7 +351,15 @@ function startVoiceInput() {
   };
   recognition.onerror = e => {
     if (e && e.error === "no-speech") return;
-    setStatus("音声入力でエラーが発生しました。マイクの許可を確認してください。");
+    const fatalErrors = ["not-allowed", "service-not-allowed", "audio-capture", "network"];
+    if (e && fatalErrors.includes(e.error)) {
+      keepVoiceListening = false;
+      stopVoiceRequested = true;
+      setVoiceButtonState(false);
+      setStatus("音声入力を開始できませんでした。ChromeではHTTPSまたはlocalhost、マイク許可が必要です。");
+      return;
+    }
+    setStatus("音声入力でエラーが発生しました。もう一度待機します。停止する時は停止を押してください。");
   };
   recognition.onend = () => {
     const wasStopped = stopVoiceRequested;
@@ -382,7 +390,9 @@ function startVoiceInput() {
   } catch (_) {
     activeRecognition = null;
     stopVoiceRequested = false;
+    keepVoiceListening = false;
     setVoiceButtonState(false);
+    setStatus("音声入力を開始できませんでした。マイク許可やブラウザの制限を確認してください。");
   }
 }
 
@@ -428,16 +438,30 @@ async function fetchCurrentWeather() {
     const position = await getCurrentPosition();
     const latitude = position.coords.latitude;
     const longitude = position.coords.longitude;
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}&hourly=weather_code&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto`;
-    const response = await fetch(url);
-    if (!response.ok) throw new Error("weather fetch failed");
-    const data = await response.json();
-    fields.weather.value = summarizeDailyWeather(data.hourly?.weather_code || []);
-    fields.tempHigh.value = formatTemperature(data.daily?.temperature_2m_max?.[0]);
-    fields.tempLow.value = formatTemperature(data.daily?.temperature_2m_min?.[0]);
+    const data = await fetchWeatherForecast(latitude, longitude);
+    const hourlyCodes = data.hourly && data.hourly.weather_code ? data.hourly.weather_code : [];
+    const dailyCode = data.daily && data.daily.weather_code ? data.daily.weather_code[0] : null;
+    fields.weather.value = summarizeDailyWeather(hourlyCodes) || weatherCodeToJapanese(dailyCode);
+    fields.tempHigh.value = formatTemperature(data.daily && data.daily.temperature_2m_max ? data.daily.temperature_2m_max[0] : null);
+    fields.tempLow.value = formatTemperature(data.daily && data.daily.temperature_2m_min ? data.daily.temperature_2m_min[0] : null);
     setStatus("今日の天気と最高・最低気温を入れました。");
-  } catch {
-    setStatus("天気を取得できませんでした。位置情報の許可やネット接続を確認してください。");
+  } catch (error) {
+    setStatus(`天気を取得できませんでした。位置情報の許可、HTTPS、ネット接続を確認してください。${error && error.message ? ` (${error.message})` : ""}`);
+  }
+}
+
+async function fetchWeatherForecast(latitude, longitude) {
+  const params = `latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=Asia%2FTokyo`;
+  const detailedUrl = `https://api.open-meteo.com/v1/forecast?${params}&hourly=weather_code`;
+  try {
+    const response = await fetch(detailedUrl, { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (_) {
+    const fallbackUrl = `https://api.open-meteo.com/v1/forecast?${params}`;
+    const response = await fetch(fallbackUrl, { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
   }
 }
 
@@ -445,7 +469,7 @@ function getCurrentPosition() {
   return new Promise((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(resolve, reject, {
       enableHighAccuracy: false,
-      timeout: 12000,
+      timeout: 25000,
       maximumAge: 10 * 60 * 1000
     });
   });
