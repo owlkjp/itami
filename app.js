@@ -17,7 +17,6 @@ const fields = {
   text: document.querySelector("#entryText"),
   importText: document.querySelector("#importText"),
   importFile: document.querySelector("#importFile"),
-  month: document.querySelector("#monthPicker"),
   historyStart: document.querySelector("#historyStartDate"),
   historyEnd: document.querySelector("#historyEndDate"),
   historySort: document.querySelector("#historySort"),
@@ -26,7 +25,8 @@ const fields = {
   doctorStart: document.querySelector("#doctorStartDate"),
   doctorEnd: document.querySelector("#doctorEndDate"),
   status: document.querySelector("#voiceStatus"),
-  settingsStatus: document.querySelector("#settingsStatus")
+  settingsStatus: document.querySelector("#settingsStatus"),
+  reloadStatus: document.querySelector("#reloadStatus")
 };
 
 const scoreInputs = {
@@ -46,7 +46,6 @@ init();
 
 function init() {
   fields.date.value = toLocalInputValue(new Date());
-  fields.month.value = currentMonth();
   setDefaultDoctorRange();
   renderSettings();
   applySymptomLabels();
@@ -81,12 +80,11 @@ function bindActions() {
   document.querySelector("#historyExportButton").addEventListener("click", exportHistoryCsv);
   document.querySelector("#deleteHistoryRangeButton").addEventListener("click", deleteHistoryRange);
   document.querySelector("#printButton").addEventListener("click", () => printView("doctor"));
-  document.querySelector("#monthPrintButton").addEventListener("click", () => printView("month"));
   document.querySelector("#weatherButton").addEventListener("click", fetchCurrentWeather);
   document.querySelector("#saveLabelsButton").addEventListener("click", saveSymptomLabelSettings);
   document.querySelector("#resetLabelsButton").addEventListener("click", resetSymptomLabelSettings);
+  document.querySelector("#reloadAppButton").addEventListener("click", reloadFreshVersion);
   document.querySelector("#clearHistoryFilterButton").addEventListener("click", clearHistoryFilters);
-  fields.month.addEventListener("change", renderAll);
   fields.historyStart.addEventListener("change", renderHistory);
   fields.historyEnd.addEventListener("change", renderHistory);
   fields.historySort.addEventListener("change", renderHistory);
@@ -123,7 +121,26 @@ function printView(viewId) {
 }
 
 function clearPrintMode() {
-  document.body.classList.remove("print-month", "print-doctor");
+  document.body.classList.remove("print-doctor");
+}
+
+async function reloadFreshVersion() {
+  fields.reloadStatus.textContent = "キャッシュを削除して再読み込みします。";
+  try {
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(key => caches.delete(key)));
+    }
+    if ("serviceWorker" in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map(registration => registration.unregister()));
+    }
+  } catch {
+    fields.reloadStatus.textContent = "一部のキャッシュ削除に失敗しましたが、再読み込みします。";
+  }
+  const url = new URL(window.location.href);
+  url.searchParams.set("version", String(Date.now()));
+  window.location.replace(url.toString());
 }
 
 function loadSymptomLabels() {
@@ -641,21 +658,12 @@ function readScores() {
 function renderAll() {
   renderRecent();
   renderHistory();
-  renderMonth();
   renderDoctorReport();
 }
 
 function renderRecent() {
   const recent = [...entries].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10);
   document.querySelector("#recentList").innerHTML = recent.map(renderEntry).join("") || emptyText("まだ記録がありません。");
-}
-
-function renderMonth() {
-  const month = fields.month.value || currentMonth();
-  const monthEntries = entries.filter(entry => entry.date.slice(0, 7) === month);
-  document.querySelector("#summaryCards").innerHTML = buildSummaryCards(monthEntries);
-  document.querySelector("#monthList").innerHTML = monthEntries.map(renderEntry).join("") || emptyText("この月の記録はありません。");
-  drawChart(monthEntries);
 }
 
 function renderHistory() {
@@ -819,14 +827,6 @@ function renderDoctorReport() {
     </table>
   `;
   drawChart(reportEntries, "#doctorChart");
-}
-
-function buildSummaryCards(monthEntries) {
-  if (!monthEntries.length) return emptyText("この月の記録はありません。");
-  return symptoms.slice(0, 4).map(symptom => {
-    const values = monthEntries.map(entry => entry.scores[symptom.key]).filter(Number.isFinite);
-    return `<div class="summary-card"><span>${symptom.label} 平均</span><strong>${formatNumber(average(values))}</strong></div>`;
-  }).join("");
 }
 
 function drawChart(monthEntries, selector = "#chart") {
@@ -1020,7 +1020,7 @@ function currentMonth() {
 }
 
 function setDefaultDoctorRange() {
-  const month = fields.month.value || currentMonth();
+  const month = currentMonth();
   const [year, monthNumber] = month.split("-").map(Number);
   const start = new Date(year, monthNumber - 1, 1);
   const end = new Date(year, monthNumber, 0);

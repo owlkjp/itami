@@ -20,7 +20,6 @@
   <nav class="tabs" aria-label="画面切り替え">
     <button class="tab active" data-view="entry" type="button">入力</button>
     <button class="tab" data-view="history" type="button">過去記録</button>
-    <button class="tab" data-view="month" type="button">月まとめ</button>
     <button class="tab" data-view="doctor" type="button">受診用</button>
     <button class="tab" data-view="settings" type="button">設定</button>
   </nav>
@@ -123,24 +122,6 @@
       </div>
     </section>
 
-    <section id="month" class="view">
-      <div class="panel">
-        <div class="panel-title-row">
-          <h2>月ごとのまとめ</h2>
-          <div class="button-group">
-            <input id="monthPicker" type="month">
-            <button id="monthPrintButton" class="primary" type="button">印刷・PDF</button>
-          </div>
-        </div>
-        <div id="summaryCards" class="summary-grid"></div>
-        <canvas id="chart" width="900" height="440" aria-label="症状スコアのグラフ"></canvas>
-      </div>
-      <div class="panel">
-        <h2>日別メモ</h2>
-        <div id="monthList" class="log-list"></div>
-      </div>
-    </section>
-
     <section id="doctor" class="view">
       <div class="panel report-panel">
         <div class="panel-title-row no-print">
@@ -162,6 +143,14 @@
     </section>
 
     <section id="settings" class="view">
+      <div class="panel">
+        <h2>アプリの更新</h2>
+        <div class="actions">
+          <button id="reloadAppButton" class="primary" type="button">新しいバージョンを再読み込み</button>
+        </div>
+        <p id="reloadStatus" class="status"></p>
+      </div>
+
       <div class="panel">
         <h2>項目名の設定</h2>
         <div class="settings-grid">

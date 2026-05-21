@@ -45,7 +45,7 @@ h2 { font-size: 18px; margin-bottom: 14px; letter-spacing: 0; }
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
   padding: 10px 12px;
   background: var(--bg);
@@ -318,11 +318,8 @@ canvas {
   .app-header, .tabs, .no-print { display: none !important; }
   main { width: 100%; padding: 0; }
   .view { display: none !important; }
-  body.print-month #month,
   body.print-doctor #doctor { display: block !important; }
   .panel { box-shadow: none; border: 0; padding: 0; }
-  #month .panel-title-row .button-group { display: none !important; }
-  #month canvas { page-break-inside: avoid; }
   .report-heading { margin-bottom: 4mm; }
   .doctor-report h2 { font-size: 16px; }
   .doctor-chart {
