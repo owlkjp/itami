@@ -52,20 +52,12 @@
         <div id="voiceControls" class="voice-controls">
           <button id="voiceButton" class="primary" type="button">音声入力</button>
           <button id="voiceStopButton" class="danger hidden" type="button">停止</button>
-          <div id="voiceBanner" class="voice-banner hidden">録音中</div>
         </div>
         <label>
           話した内容・メモ
           <textarea id="entryText" rows="7" placeholder="例：今日は頭痛が強く、頭痛7 腰4 足2 耳鳴り5 です"></textarea>
         </label>
-        <div class="score-grid">
-          <label><span data-symptom-label="headache">頭痛</span> <input id="scoreHeadache" inputmode="numeric" type="number" min="0" max="10"></label>
-          <label><span data-symptom-label="back">腰</span> <input id="scoreBack" inputmode="numeric" type="number" min="0" max="10"></label>
-          <label><span data-symptom-label="leg">足</span> <input id="scoreLeg" inputmode="numeric" type="number" min="0" max="10"></label>
-          <label><span data-symptom-label="tinnitus">耳鳴り</span> <input id="scoreTinnitus" inputmode="numeric" type="number" min="0" max="10"></label>
-          <label><span data-symptom-label="hand">手</span> <input id="scoreHand" inputmode="numeric" type="number" min="0" max="10"></label>
-          <label><span data-symptom-label="sleep">睡眠</span> <input id="scoreSleep" inputmode="numeric" type="number" min="0" max="10" placeholder="悪さ"></label>
-        </div>
+        <div id="scoreGrid" class="score-grid"></div>
         <div class="actions">
           <button id="cancelEditButton" class="hidden" type="button">訂正をやめる</button>
           <button id="extractButton" type="button">文章から点数を拾う</button>
@@ -107,18 +99,6 @@
             <select id="historySort">
               <option value="dateDesc">日付 新しい順</option>
               <option value="dateAsc">日付 古い順</option>
-              <option value="headacheDesc">頭痛 高い順</option>
-              <option value="headacheAsc">頭痛 低い順</option>
-              <option value="backDesc">腰 高い順</option>
-              <option value="backAsc">腰 低い順</option>
-              <option value="legDesc">足 高い順</option>
-              <option value="legAsc">足 低い順</option>
-              <option value="tinnitusDesc">耳鳴り 高い順</option>
-              <option value="tinnitusAsc">耳鳴り 低い順</option>
-              <option value="handDesc">手 高い順</option>
-              <option value="handAsc">手 低い順</option>
-              <option value="sleepDesc">睡眠 高い順</option>
-              <option value="sleepAsc">睡眠 低い順</option>
             </select>
           </label>
         </div>
@@ -158,14 +138,11 @@
 
       <div class="panel">
         <h2>項目名の設定</h2>
-        <div class="settings-grid">
-          <label>項目1 <input data-setting-label="headache" type="text"></label>
-          <label>項目2 <input data-setting-label="back" type="text"></label>
-          <label>項目3 <input data-setting-label="leg" type="text"></label>
-          <label>項目4 <input data-setting-label="tinnitus" type="text"></label>
-          <label>項目5 <input data-setting-label="hand" type="text"></label>
-          <label>項目6 <input data-setting-label="sleep" type="text"></label>
-        </div>
+        <label>
+          項目数
+          <select id="symptomCountSelect"></select>
+        </label>
+        <div id="settingsGrid" class="settings-grid"></div>
         <div class="actions">
           <button id="resetLabelsButton" type="button">標準に戻す</button>
           <button id="saveLabelsButton" class="primary" type="button">設定を保存</button>

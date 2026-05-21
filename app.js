@@ -1,15 +1,21 @@
 const STORAGE_KEY = "healthVoiceLog.v1";
 const LABELS_KEY = "healthVoiceLog.labels.v1";
-const APP_VERSION = "v4.3";
+const COUNT_KEY = "healthVoiceLog.symptomCount.v1";
+const APP_VERSION = "v4.6";
 const defaultSymptoms = [
   { key: "headache", label: "頭痛", color: "#e60000", aliases: ["頭痛", "頭"] },
   { key: "back", label: "腰", color: "#0057ff", aliases: ["腰", "腰の痛み"] },
   { key: "leg", label: "足", color: "#00a000", aliases: ["足", "足の痛み"] },
   { key: "tinnitus", label: "耳鳴り", color: "#8a00ff", aliases: ["耳鳴り"] },
   { key: "hand", label: "手", color: "#ff8c00", aliases: ["手", "手の痛み", "手のしびれ", "左腕のしびれ"] },
-  { key: "sleep", label: "睡眠の悪さ", color: "#111111", aliases: ["眠れない", "眠りが浅い", "寝づらい"] }
+  { key: "sleep", label: "睡眠の悪さ", color: "#111111", aliases: ["眠れない", "眠りが浅い", "寝づらい"] },
+  { key: "item7", label: "項目7", color: "#00a6ff", aliases: ["項目7"] },
+  { key: "item8", label: "項目8", color: "#ff1493", aliases: ["項目8"] },
+  { key: "item9", label: "項目9", color: "#7f7f00", aliases: ["項目9"] },
+  { key: "item10", label: "項目10", color: "#00a6a6", aliases: ["項目10"] }
 ];
 const symptoms = loadSymptomLabels();
+let symptomCount = loadSymptomCount();
 
 const fields = {
   date: document.querySelector("#entryDate"),
@@ -31,14 +37,7 @@ const fields = {
   reloadStatus: document.querySelector("#reloadStatus")
 };
 
-const scoreInputs = {
-  headache: document.querySelector("#scoreHeadache"),
-  back: document.querySelector("#scoreBack"),
-  leg: document.querySelector("#scoreLeg"),
-  tinnitus: document.querySelector("#scoreTinnitus"),
-  hand: document.querySelector("#scoreHand"),
-  sleep: document.querySelector("#scoreSleep")
-};
+let scoreInputs = {};
 
 let entries = loadEntries();
 let deferredInstallPrompt = null;
@@ -53,6 +52,7 @@ init();
 function init() {
   fields.date.value = toLocalInputValue(new Date());
   setDefaultDoctorRange();
+  renderScoreInputs();
   renderSettings();
   applySymptomLabels();
   renderAppVersion();
@@ -90,6 +90,7 @@ function bindActions() {
   document.querySelector("#weatherButton").addEventListener("click", fetchCurrentWeather);
   document.querySelector("#saveLabelsButton").addEventListener("click", saveSymptomLabelSettings);
   document.querySelector("#resetLabelsButton").addEventListener("click", resetSymptomLabelSettings);
+  document.querySelector("#symptomCountSelect").addEventListener("change", previewSymptomCountSetting);
   document.querySelector("#reloadAppButton").addEventListener("click", reloadFreshVersion);
   document.querySelector("#clearHistoryFilterButton").addEventListener("click", clearHistoryFilters);
   fields.historyStart.addEventListener("change", renderHistory);
@@ -168,14 +169,49 @@ function loadSymptomLabels() {
   }));
 }
 
-function renderSettings() {
-  symptoms.forEach(symptom => {
-    const input = document.querySelector(`[data-setting-label="${symptom.key}"]`);
-    if (input) input.value = symptom.label;
+function loadSymptomCount() {
+  const value = Number(localStorage.getItem(COUNT_KEY) || 6);
+  return Number.isFinite(value) ? Math.min(10, Math.max(1, value)) : 6;
+}
+
+function activeSymptoms() {
+  return symptoms.slice(0, symptomCount);
+}
+
+function renderScoreInputs() {
+  const grid = document.querySelector("#scoreGrid");
+  if (!grid) return;
+  grid.innerHTML = activeSymptoms().map(symptom => `
+    <label><span data-symptom-label="${symptom.key}">${escapeHtml(symptom.label)}</span>
+      <input data-score-key="${symptom.key}" inputmode="numeric" type="number" min="0" max="10">
+    </label>
+  `).join("");
+  scoreInputs = {};
+  grid.querySelectorAll("[data-score-key]").forEach(input => {
+    scoreInputs[input.dataset.scoreKey] = input;
   });
 }
 
+function renderSettings() {
+  const countSelect = document.querySelector("#symptomCountSelect");
+  if (countSelect) {
+    countSelect.innerHTML = Array.from({ length: 10 }, (_, index) => {
+      const count = index + 1;
+      return `<option value="${count}">${count}項目</option>`;
+    }).join("");
+    countSelect.value = String(symptomCount);
+  }
+  const grid = document.querySelector("#settingsGrid");
+  if (!grid) return;
+  grid.innerHTML = activeSymptoms().map((symptom, index) => `
+    <label>項目${index + 1} <input data-setting-label="${symptom.key}" type="text" value="${escapeHtml(symptom.label)}"></label>
+  `).join("");
+}
+
 function saveSymptomLabelSettings() {
+  const countSelect = document.querySelector("#symptomCountSelect");
+  symptomCount = countSelect ? Number(countSelect.value) : symptomCount;
+  localStorage.setItem(COUNT_KEY, String(symptomCount));
   const labels = {};
   symptoms.forEach(symptom => {
     const input = document.querySelector(`[data-setting-label="${symptom.key}"]`);
@@ -184,17 +220,32 @@ function saveSymptomLabelSettings() {
     labels[symptom.key] = label;
   });
   localStorage.setItem(LABELS_KEY, JSON.stringify(labels));
+  renderScoreInputs();
+  renderSettings();
   applySymptomLabels();
   renderAll();
   fields.settingsStatus.textContent = "項目名を保存しました。";
 }
 
+function previewSymptomCountSetting() {
+  document.querySelectorAll("[data-setting-label]").forEach(input => {
+    const symptom = symptoms.find(item => item.key === input.dataset.settingLabel);
+    if (symptom && input.value.trim()) symptom.label = input.value.trim();
+  });
+  const countSelect = document.querySelector("#symptomCountSelect");
+  symptomCount = countSelect ? Number(countSelect.value) : symptomCount;
+  renderSettings();
+}
+
 function resetSymptomLabelSettings() {
   localStorage.removeItem(LABELS_KEY);
+  localStorage.removeItem(COUNT_KEY);
+  symptomCount = 6;
   symptoms.forEach(symptom => {
     const standard = defaultSymptoms.find(item => item.key === symptom.key);
     symptom.label = standard.label;
   });
+  renderScoreInputs();
   renderSettings();
   applySymptomLabels();
   renderAll();
@@ -202,7 +253,7 @@ function resetSymptomLabelSettings() {
 }
 
 function applySymptomLabels() {
-  symptoms.forEach(symptom => {
+  activeSymptoms().forEach(symptom => {
     document.querySelectorAll(`[data-symptom-label="${symptom.key}"]`).forEach(element => {
       element.textContent = symptom.label;
     });
@@ -211,12 +262,16 @@ function applySymptomLabels() {
 }
 
 function updateHistorySortLabels() {
-  symptoms.forEach(symptom => {
-    const desc = fields.historySort.querySelector(`option[value="${symptom.key}Desc"]`);
-    const asc = fields.historySort.querySelector(`option[value="${symptom.key}Asc"]`);
-    if (desc) desc.textContent = `${symptom.label} 高い順`;
-    if (asc) asc.textContent = `${symptom.label} 低い順`;
-  });
+  const current = fields.historySort.value || "dateDesc";
+  fields.historySort.innerHTML = `
+    <option value="dateDesc">日付 新しい順</option>
+    <option value="dateAsc">日付 古い順</option>
+    ${activeSymptoms().map(symptom => `
+      <option value="${symptom.key}Desc">${escapeHtml(symptom.label)} 高い順</option>
+      <option value="${symptom.key}Asc">${escapeHtml(symptom.label)} 低い順</option>
+    `).join("")}
+  `;
+  fields.historySort.value = [...fields.historySort.options].some(option => option.value === current) ? current : "dateDesc";
 }
 
 function saveEntry() {
@@ -961,7 +1016,7 @@ function drawChart(monthEntries, selector = "#chart") {
   }
   const sorted = [...monthEntries].sort((a, b) => new Date(a.date) - new Date(b.date));
   const xFor = index => pad.left + (sorted.length === 1 ? width / 2 : (index / (sorted.length - 1)) * width);
-  const chartSymptoms = symptoms.slice(0, 5);
+  const chartSymptoms = activeSymptoms();
   chartSymptoms.forEach((symptom, symptomIndex) => {
     const points = sorted.map((entry, index) => {
       const value = entry.scores[symptom.key];
@@ -974,6 +1029,7 @@ function drawChart(monthEntries, selector = "#chart") {
     ctx.strokeStyle = symptom.color;
     ctx.fillStyle = symptom.color;
     ctx.lineWidth = 4;
+    ctx.setLineDash(lineDashForIndex(symptomIndex));
     let segmentStarted = false;
     ctx.beginPath();
     points.forEach(point => {
@@ -986,6 +1042,7 @@ function drawChart(monthEntries, selector = "#chart") {
       segmentStarted = true;
     });
     ctx.stroke();
+    ctx.setLineDash([]);
     points.filter(point => point.hasValue).forEach(point => {
       ctx.beginPath();
       ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
@@ -996,11 +1053,33 @@ function drawChart(monthEntries, selector = "#chart") {
   drawDateLabels(ctx, sorted, xFor, pad, height, legendY);
   chartSymptoms.forEach((symptom, index) => {
     const x = pad.left + index * 145;
-    ctx.fillStyle = symptom.color;
-    ctx.fillRect(x, legendY - 12, 18, 8);
+    ctx.strokeStyle = symptom.color;
+    ctx.lineWidth = 4;
+    ctx.setLineDash(lineDashForIndex(index));
+    ctx.beginPath();
+    ctx.moveTo(x, legendY - 8);
+    ctx.lineTo(x + 28, legendY - 8);
+    ctx.stroke();
+    ctx.setLineDash([]);
     ctx.fillStyle = "#24211c";
-    ctx.fillText(symptom.label, x + 26, legendY);
+    ctx.fillText(symptom.label, x + 36, legendY);
   });
+}
+
+function lineDashForIndex(index) {
+  const patterns = [
+    [],
+    [14, 8],
+    [4, 7],
+    [16, 6, 4, 6],
+    [2, 6],
+    [20, 6, 2, 6, 2, 6],
+    [10, 5, 2, 5],
+    [6, 4, 6, 10],
+    [1, 5],
+    [18, 5, 8, 5]
+  ];
+  return patterns[index % patterns.length];
 }
 
 function getOverlapOffset(entry, chartSymptoms, symptomIndex, value) {
@@ -1057,7 +1136,7 @@ function formatWeatherMeta(entry) {
 }
 
 function scoreChips(scores, separator = "") {
-  const items = symptoms.filter(symptom => Number.isFinite(scores[symptom.key])).map(symptom => `${symptom.label}${scores[symptom.key]}`);
+  const items = activeSymptoms().filter(symptom => Number.isFinite(scores[symptom.key])).map(symptom => `${symptom.label}${scores[symptom.key]}`);
   if (separator) return items.join(separator) || "-";
   return items.map(item => `<span class="chip">${item}</span>`).join("") || `<span class="chip">点数なし</span>`;
 }
@@ -1072,10 +1151,10 @@ function exportHistoryCsv() {
 }
 
 function downloadEntriesCsv(targetEntries, filename) {
-  const header = ["日時", "天気", "最高気温", "最低気温", ...symptoms.map(s => s.label), "メモ"];
+  const header = ["日時", "天気", "最高気温", "最低気温", ...activeSymptoms().map(s => s.label), "メモ"];
   const rows = targetEntries.map(entry => [
     formatDate(entry.date), entry.weather, entry.tempHigh ?? entry.temperature ?? "", entry.tempLow ?? "",
-    ...symptoms.map(symptom => entry.scores[symptom.key] ?? ""),
+    ...activeSymptoms().map(symptom => entry.scores[symptom.key] ?? ""),
     entry.text
   ]);
   const csv = [header, ...rows].map(row => row.map(csvCell).join(",")).join("\n");
