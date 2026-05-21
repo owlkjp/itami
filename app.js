@@ -80,7 +80,8 @@ function bindActions() {
   document.querySelector("#exportButton").addEventListener("click", exportCsv);
   document.querySelector("#historyExportButton").addEventListener("click", exportHistoryCsv);
   document.querySelector("#deleteHistoryRangeButton").addEventListener("click", deleteHistoryRange);
-  document.querySelector("#printButton").addEventListener("click", () => window.print());
+  document.querySelector("#printButton").addEventListener("click", () => printView("doctor"));
+  document.querySelector("#monthPrintButton").addEventListener("click", () => printView("month"));
   document.querySelector("#weatherButton").addEventListener("click", fetchCurrentWeather);
   document.querySelector("#saveLabelsButton").addEventListener("click", saveSymptomLabelSettings);
   document.querySelector("#resetLabelsButton").addEventListener("click", resetSymptomLabelSettings);
@@ -100,6 +101,7 @@ function bindActions() {
   if (voiceButton) voiceButton.addEventListener("click", startVoiceInput);
   const voiceStopButton = getVoiceStopButton();
   if (voiceStopButton) voiceStopButton.addEventListener("click", stopVoiceInput);
+  window.addEventListener("afterprint", clearPrintMode);
 
   window.addEventListener("beforeinstallprompt", event => {
     event.preventDefault();
@@ -112,6 +114,16 @@ function bindActions() {
     deferredInstallPrompt = null;
     document.querySelector("#installButton").classList.add("hidden");
   });
+}
+
+function printView(viewId) {
+  clearPrintMode();
+  document.body.classList.add(`print-${viewId}`);
+  window.print();
+}
+
+function clearPrintMode() {
+  document.body.classList.remove("print-month", "print-doctor");
 }
 
 function loadSymptomLabels() {
@@ -211,10 +223,10 @@ let activeRecognition = null;
 let stopVoiceRequested = false;
 
 function getVoiceStopButton() {
-  const voiceButton = document.querySelector("#voiceButton");
-  if (!voiceButton) return null;
   let stopButton = document.querySelector("#voiceStopButton");
   if (!stopButton) {
+    const voiceButton = document.querySelector("#voiceButton");
+    if (!voiceButton) return null;
     stopButton = document.createElement("button");
     stopButton.type = "button";
     stopButton.id = "voiceStopButton";
@@ -225,7 +237,6 @@ function getVoiceStopButton() {
     stopButton.setAttribute("aria-label", "音声入力を停止");
     voiceButton.insertAdjacentElement("afterend", stopButton);
   }
-  stopButton.hidden = true;
   return stopButton;
 }
 
@@ -239,6 +250,7 @@ function setVoiceButtonState(listening) {
   }
   if (stopButton) {
     stopButton.hidden = !listening;
+    stopButton.classList.toggle("hidden", !listening);
     stopButton.disabled = !listening;
   }
 }
@@ -265,7 +277,7 @@ function startVoiceInput() {
   const recognition = new SpeechRecognition();
   recognition.lang = "ja-JP";
   recognition.interimResults = true;
-  recognition.continuous = true;
+  recognition.continuous = false;
 
   // 既存テキストを一度だけ確定し、認識結果は resultIndex ではなく結果番号ごとに上書きして重複を防ぐ。
   const baseText = fields.text.value;

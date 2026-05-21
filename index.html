@@ -30,7 +30,10 @@
       <div class="panel">
         <div class="panel-title-row">
           <h2>今日の記録</h2>
-          <button id="voiceButton" class="primary" type="button">音声入力</button>
+          <div class="button-group">
+            <button id="voiceButton" class="primary" type="button">音声入力</button>
+            <button id="voiceStopButton" class="danger hidden" type="button">停止</button>
+          </div>
         </div>
         <label>
           日時
@@ -65,21 +68,6 @@
           <button id="saveButton" class="primary" type="button">保存</button>
         </div>
         <p id="voiceStatus" class="status"></p>
-      </div>
-
-      <div class="panel">
-        <h2>これまでのテキストを取り込む</h2>
-        <label>
-          体調ログを貼り付け
-          <textarea id="importText" rows="8" placeholder="体調ログ.txt の内容をここに貼り付け"></textarea>
-        </label>
-        <label>
-          CSV/TXTファイルを選ぶ
-          <input id="importFile" type="file" accept=".csv,.txt,text/csv,text/plain">
-        </label>
-        <div class="actions">
-          <button id="importButton" class="primary" type="button">取り込む</button>
-        </div>
       </div>
 
       <div class="panel">
@@ -139,7 +127,10 @@
       <div class="panel">
         <div class="panel-title-row">
           <h2>月ごとのまとめ</h2>
-          <input id="monthPicker" type="month">
+          <div class="button-group">
+            <input id="monthPicker" type="month">
+            <button id="monthPrintButton" class="primary" type="button">印刷・PDF</button>
+          </div>
         </div>
         <div id="summaryCards" class="summary-grid"></div>
         <canvas id="chart" width="900" height="440" aria-label="症状スコアのグラフ"></canvas>
@@ -186,6 +177,21 @@
           <button id="saveLabelsButton" class="primary" type="button">設定を保存</button>
         </div>
         <p id="settingsStatus" class="status"></p>
+      </div>
+
+      <div class="panel">
+        <h2>過去データの取り込み</h2>
+        <label>
+          体調ログを貼り付け
+          <textarea id="importText" rows="8" placeholder="体調ログ.txt や CSV の内容をここに貼り付け"></textarea>
+        </label>
+        <label>
+          CSV/TXTファイルを選ぶ
+          <input id="importFile" type="file" accept=".csv,.txt,text/csv,text/plain">
+        </label>
+        <div class="actions">
+          <button id="importButton" class="primary" type="button">取り込む</button>
+        </div>
       </div>
 
       <div class="panel danger-zone">

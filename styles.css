@@ -161,6 +161,10 @@ textarea { resize: vertical; line-height: 1.55; }
   justify-content: flex-end;
 }
 
+.button-group input {
+  width: auto;
+}
+
 .date-range {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -311,10 +315,14 @@ canvas {
   }
 
   body { background: #fff; }
-  .app-header, .tabs, .no-print, #entry, #history, #month, #settings { display: none !important; }
+  .app-header, .tabs, .no-print { display: none !important; }
   main { width: 100%; padding: 0; }
-  .view, #doctor { display: block !important; }
+  .view { display: none !important; }
+  body.print-month #month,
+  body.print-doctor #doctor { display: block !important; }
   .panel { box-shadow: none; border: 0; padding: 0; }
+  #month .panel-title-row .button-group { display: none !important; }
+  #month canvas { page-break-inside: avoid; }
   .report-heading { margin-bottom: 4mm; }
   .doctor-report h2 { font-size: 16px; }
   .doctor-chart {
