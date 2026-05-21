@@ -1,5 +1,6 @@
 const STORAGE_KEY = "healthVoiceLog.v1";
 const LABELS_KEY = "healthVoiceLog.labels.v1";
+const APP_VERSION = "v4.1";
 const defaultSymptoms = [
   { key: "headache", label: "頭痛", color: "#e60000", aliases: ["頭痛", "頭"] },
   { key: "back", label: "腰", color: "#0057ff", aliases: ["腰", "腰の痛み"] },
@@ -13,7 +14,8 @@ const symptoms = loadSymptomLabels();
 const fields = {
   date: document.querySelector("#entryDate"),
   weather: document.querySelector("#entryWeather"),
-  temperature: document.querySelector("#entryTemperature"),
+  tempHigh: document.querySelector("#entryTempHigh"),
+  tempLow: document.querySelector("#entryTempLow"),
   text: document.querySelector("#entryText"),
   importText: document.querySelector("#importText"),
   importFile: document.querySelector("#importFile"),
@@ -53,6 +55,7 @@ function init() {
   setDefaultDoctorRange();
   renderSettings();
   applySymptomLabels();
+  renderAppVersion();
   bindTabs();
   bindActions();
   renderAll();
@@ -126,6 +129,11 @@ function printView(viewId) {
 
 function clearPrintMode() {
   document.body.classList.remove("print-doctor");
+}
+
+function renderAppVersion() {
+  const version = document.querySelector("#appVersion");
+  if (version) version.textContent = `バージョン ${APP_VERSION}`;
 }
 
 async function reloadFreshVersion() {
@@ -223,7 +231,8 @@ function saveEntry() {
     date: new Date(fields.date.value || Date.now()).toISOString(),
     text,
     weather: fields.weather.value.trim(),
-    temperature: fields.temperature.value === "" ? null : Number(fields.temperature.value),
+    tempHigh: fields.tempHigh.value === "" ? null : Number(fields.tempHigh.value),
+    tempLow: fields.tempLow.value === "" ? null : Number(fields.tempLow.value),
     scores
   };
   if (editingEntryId) {
@@ -350,11 +359,11 @@ function startVoiceInput() {
     compose("");
     if (keepVoiceListening && !wasStopped) {
       setVoiceButtonState(true);
-      setStatus("音声入力を待機中です。話し始めると再開します。終わる時は停止を押してください。");
+      setStatus("音声入力を継続待機中です。停止を押すまで自動で再開します。");
       voiceRestartTimer = setTimeout(() => {
         voiceRestartTimer = null;
         if (keepVoiceListening && !activeRecognition) startVoiceInput();
-      }, 1200);
+      }, 200);
       return;
     }
     stopVoiceRequested = false;
@@ -367,7 +376,7 @@ function startVoiceInput() {
   stopVoiceRequested = false;
   keepVoiceListening = true;
   setVoiceButtonState(true);
-  setStatus("録音中です。終わったら『停止』を押してください。");
+  setStatus("録音中です。停止を押すまで継続します。");
   try {
     recognition.start();
   } catch (_) {
@@ -414,20 +423,19 @@ async function fetchCurrentWeather() {
     setStatus("この端末では位置情報を使えません。天気と気温は手入力してください。");
     return;
   }
-  setStatus("現在地から天気を取得しています。");
+  setStatus("今日の天気と最高・最低気温を取得しています。");
   try {
     const position = await getCurrentPosition();
     const latitude = position.coords.latitude;
     const longitude = position.coords.longitude;
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}&current=temperature_2m,weather_code&timezone=auto`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}&hourly=weather_code&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto`;
     const response = await fetch(url);
     if (!response.ok) throw new Error("weather fetch failed");
     const data = await response.json();
-    const temperature = data.current?.temperature_2m;
-    const weatherCode = data.current?.weather_code;
-    fields.weather.value = weatherCodeToJapanese(weatherCode);
-    fields.temperature.value = Number.isFinite(temperature) ? String(Math.round(temperature * 10) / 10) : "";
-    setStatus("天気と気温を入れました。");
+    fields.weather.value = summarizeDailyWeather(data.hourly?.weather_code || []);
+    fields.tempHigh.value = formatTemperature(data.daily?.temperature_2m_max?.[0]);
+    fields.tempLow.value = formatTemperature(data.daily?.temperature_2m_min?.[0]);
+    setStatus("今日の天気と最高・最低気温を入れました。");
   } catch {
     setStatus("天気を取得できませんでした。位置情報の許可やネット接続を確認してください。");
   }
@@ -475,6 +483,35 @@ function weatherCodeToJapanese(code) {
     99: "雷雨と強いひょう"
   };
   return labels[code] || "";
+}
+
+function summarizeDailyWeather(codes) {
+  const labels = codes.map(weatherCodeToSimpleLabel).filter(Boolean);
+  if (!labels.length) return "";
+  const transitions = [];
+  labels.forEach(label => {
+    if (transitions[transitions.length - 1] !== label) transitions.push(label);
+  });
+  const mainTransitions = transitions.filter((label, index) => index === 0 || label !== transitions[index - 1]);
+  let summary = mainTransitions.slice(0, 3).join("のち");
+  const rainCount = labels.filter(label => label === "雨" || label === "雪").length;
+  const rainLabel = labels.includes("雪") ? "雪" : "雨";
+  if (rainCount > 0 && rainCount <= 3 && !summary.includes(rainLabel)) {
+    summary += `、一時${rainLabel}`;
+  }
+  return summary;
+}
+
+function weatherCodeToSimpleLabel(code) {
+  if ([0, 1].includes(code)) return "晴れ";
+  if ([2, 3, 45, 48].includes(code)) return "曇り";
+  if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code)) return "雨";
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return "雪";
+  return weatherCodeToJapanese(code);
+}
+
+function formatTemperature(value) {
+  return Number.isFinite(value) ? String(Math.round(value * 10) / 10) : "";
 }
 
 function importLog(raw) {
@@ -581,6 +618,8 @@ function parseHealthCsv(raw) {
       date: date.toISOString(),
       text: [otherText, noteText].map(value => value.trim()).filter(Boolean).join("\n") || "CSVから取り込み",
       weather: weatherInfo.weather,
+      tempHigh: weatherInfo.tempHigh,
+      tempLow: weatherInfo.tempLow,
       temperature: weatherInfo.temperature,
       scores
     };
@@ -644,7 +683,7 @@ function parseWeatherAndTemperature(value) {
   const tempMatch = toHalfWidth(text).match(/(-?\d+(?:\.\d+)?)\s*°?\s*C|(-?\d+(?:\.\d+)?)\s*℃/i);
   const temperature = tempMatch ? Number(tempMatch[1] || tempMatch[2]) : null;
   const weather = text.replace(/-?\d+(?:\.\d+)?\s*°?\s*C|-?\d+(?:\.\d+)?\s*℃/ig, "").replace(/[・、,\s]+$/u, "").trim();
-  return { weather, temperature };
+  return { weather, temperature, tempHigh: temperature, tempLow: null };
 }
 
 function parseScoreCell(value) {
@@ -781,7 +820,7 @@ function sortHistoryEntries(items) {
 
 function renderHistoryEntry(entry) {
   return `<article class="log-item">
-    <div class="log-meta"><span>${formatDate(entry.date)}</span><span>${escapeHtml([entry.weather, entry.temperature != null ? `${entry.temperature}°C` : ""].filter(Boolean).join(" "))}</span></div>
+    <div class="log-meta"><span>${formatDate(entry.date)}</span><span>${escapeHtml(formatWeatherMeta(entry))}</span></div>
     <div>${escapeHtml(entry.text)}</div>
     <div class="chips">${scoreChips(entry.scores)}</div>
     <div class="log-actions">
@@ -796,7 +835,8 @@ function startEdit(id) {
   editingEntryId = id;
   fields.date.value = toLocalInputValue(new Date(entry.date));
   fields.weather.value = entry.weather || "";
-  fields.temperature.value = entry.temperature == null ? "" : entry.temperature;
+  fields.tempHigh.value = entry.tempHigh ?? entry.temperature ?? "";
+  fields.tempLow.value = entry.tempLow ?? "";
   fields.text.value = entry.text || "";
   Object.entries(scoreInputs).forEach(([key, input]) => {
     input.value = entry.scores && Number.isFinite(entry.scores[key]) ? entry.scores[key] : "";
@@ -816,7 +856,8 @@ function cancelEdit() {
 function resetEntryForm() {
   fields.text.value = "";
   fields.weather.value = "";
-  fields.temperature.value = "";
+  fields.tempHigh.value = "";
+  fields.tempLow.value = "";
   Object.values(scoreInputs).forEach(input => input.value = "");
   fields.date.value = toLocalInputValue(new Date());
 }
@@ -968,10 +1009,18 @@ function drawDateLabels(ctx, sorted, xFor, pad, height, legendY) {
 
 function renderEntry(entry) {
   return `<article class="log-item">
-    <div class="log-meta"><span>${formatDate(entry.date)}</span><span>${escapeHtml([entry.weather, entry.temperature != null ? `${entry.temperature}°C` : ""].filter(Boolean).join(" "))}</span></div>
+    <div class="log-meta"><span>${formatDate(entry.date)}</span><span>${escapeHtml(formatWeatherMeta(entry))}</span></div>
     <div>${escapeHtml(entry.text)}</div>
     <div class="chips">${scoreChips(entry.scores)}</div>
   </article>`;
+}
+
+function formatWeatherMeta(entry) {
+  const temperatures = [];
+  if (entry.tempHigh != null) temperatures.push(`最高${entry.tempHigh}°C`);
+  if (entry.tempLow != null) temperatures.push(`最低${entry.tempLow}°C`);
+  if (!temperatures.length && entry.temperature != null) temperatures.push(`${entry.temperature}°C`);
+  return [entry.weather, temperatures.join(" / ")].filter(Boolean).join(" ");
 }
 
 function scoreChips(scores, separator = "") {
@@ -990,9 +1039,9 @@ function exportHistoryCsv() {
 }
 
 function downloadEntriesCsv(targetEntries, filename) {
-  const header = ["日時", "天気", "気温", ...symptoms.map(s => s.label), "メモ"];
+  const header = ["日時", "天気", "最高気温", "最低気温", ...symptoms.map(s => s.label), "メモ"];
   const rows = targetEntries.map(entry => [
-    formatDate(entry.date), entry.weather, entry.temperature ?? "",
+    formatDate(entry.date), entry.weather, entry.tempHigh ?? entry.temperature ?? "", entry.tempLow ?? "",
     ...symptoms.map(symptom => entry.scores[symptom.key] ?? ""),
     entry.text
   ]);

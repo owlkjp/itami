@@ -132,7 +132,7 @@ textarea { resize: vertical; line-height: 1.55; }
 
 .weather-row {
   display: grid;
-  grid-template-columns: 1fr 120px;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
   align-items: end;
   margin-bottom: 12px;
@@ -211,6 +211,13 @@ textarea { resize: vertical; line-height: 1.55; }
   min-height: 20px;
   color: var(--accent);
   margin: 10px 0 0;
+}
+
+.version-text {
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+  margin: 18px 0 0;
 }
 
 .log-list {
@@ -323,7 +330,7 @@ canvas {
 
 @media (min-width: 760px) {
   .score-grid { grid-template-columns: repeat(3, 1fr); }
-  .weather-row { grid-template-columns: 1fr 120px auto; }
+  .weather-row { grid-template-columns: 1fr 120px 120px auto; }
   .weather-row button { grid-column: auto; }
   .history-controls { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .settings-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }

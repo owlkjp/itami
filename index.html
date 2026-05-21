@@ -41,14 +41,18 @@
         </label>
         <div class="weather-row">
           <label>
-            気象状況
-            <input id="entryWeather" type="text" placeholder="例：曇り">
+            一日の天気
+            <input id="entryWeather" type="text" placeholder="例：曇りのち晴れ、一時雨">
           </label>
           <label>
-            気温
-            <input id="entryTemperature" inputmode="decimal" type="number" step="0.1" placeholder="℃">
+            最高気温
+            <input id="entryTempHigh" inputmode="decimal" type="number" step="0.1" placeholder="℃">
           </label>
-          <button id="weatherButton" type="button">現在の天気を取得</button>
+          <label>
+            最低気温
+            <input id="entryTempLow" inputmode="decimal" type="number" step="0.1" placeholder="℃">
+          </label>
+          <button id="weatherButton" type="button">今日の天気を取得</button>
         </div>
         <label>
           話した内容・メモ
@@ -200,6 +204,8 @@
           <button id="deleteHistoryRangeButton" class="danger" type="button">指定範囲を削除</button>
         </div>
       </div>
+
+      <p id="appVersion" class="version-text"></p>
     </section>
   </main>
 
