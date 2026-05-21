@@ -165,16 +165,25 @@ textarea { resize: vertical; line-height: 1.55; }
   width: auto;
 }
 
+.voice-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 4px 0 10px;
+}
+
 .voice-banner {
-  border: 2px solid #d93025;
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  border: 1px solid #d93025;
   border-radius: 8px;
   background: #fff4f2;
   color: #b3261e;
-  font-size: 28px;
+  font-size: 16px;
   font-weight: 700;
-  text-align: center;
-  padding: 16px;
-  margin: 0 0 14px;
+  padding: 9px 13px;
 }
 
 .voice-banner::before {

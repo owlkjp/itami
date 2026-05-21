@@ -1,6 +1,6 @@
 const STORAGE_KEY = "healthVoiceLog.v1";
 const LABELS_KEY = "healthVoiceLog.labels.v1";
-const APP_VERSION = "v4.2";
+const APP_VERSION = "v4.3";
 const defaultSymptoms = [
   { key: "headache", label: "頭痛", color: "#e60000", aliases: ["頭痛", "頭"] },
   { key: "back", label: "腰", color: "#0057ff", aliases: ["腰", "腰の痛み"] },
@@ -283,7 +283,7 @@ function setVoiceButtonState(listening) {
   }
   if (banner) {
     banner.classList.toggle("hidden", !listening);
-    banner.textContent = listening ? "録音中  停止するまで待機します" : "録音中";
+    banner.textContent = listening ? "録音中" : "録音中";
   }
 }
 
@@ -309,6 +309,7 @@ function stopVoiceInput() {
 
 function startVoiceInput() {
   if (activeRecognition) return;
+  scrollToMemoArea();
   if (voiceRestartTimer) {
     clearTimeout(voiceRestartTimer);
     voiceRestartTimer = null;
@@ -394,6 +395,14 @@ function startVoiceInput() {
     setVoiceButtonState(false);
     setStatus("音声入力を開始できませんでした。マイク許可やブラウザの制限を確認してください。");
   }
+}
+
+function scrollToMemoArea() {
+  const controls = document.querySelector("#voiceControls");
+  const memo = document.querySelector("#entryText");
+  const target = controls || memo;
+  if (!target) return;
+  setTimeout(() => target.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
 }
 
 function cleanSpeechText(value) {
