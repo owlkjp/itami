@@ -1,7 +1,7 @@
 const STORAGE_KEY = "healthVoiceLog.v1";
 const LABELS_KEY = "healthVoiceLog.labels.v1";
 const COUNT_KEY = "healthVoiceLog.symptomCount.v1";
-const APP_VERSION = "v4.6";
+const APP_VERSION = "v4.7";
 const defaultSymptoms = [
   { key: "headache", label: "頭痛", color: "#e60000", aliases: ["頭痛", "頭"] },
   { key: "back", label: "腰", color: "#0057ff", aliases: ["腰", "腰の痛み"] },
@@ -617,12 +617,17 @@ function importLog(raw) {
 function parseImportedData(raw) {
   const text = String(raw || "").trim();
   if (looksLikeTableCsv(text)) return parseHealthCsv(text);
+  if (looksLikeShortDateLog(text)) return parseShortDateLog(text);
   return parseLog(text);
 }
 
 function looksLikeTableCsv(text) {
   const firstLine = text.split(/\r?\n/, 1)[0] || "";
   return firstLine.includes("日付") && firstLine.includes("時間") && firstLine.includes("頭痛");
+}
+
+function looksLikeShortDateLog(text) {
+  return /(?:^|\s)\d{1,2}\/\d{1,2}\s*(?:\([^)]*\)|（[^）]*）)?/.test(toHalfWidth(text));
 }
 
 function loadImportFile() {
@@ -664,6 +669,45 @@ function parseLog(raw) {
     });
   }
   return parsed;
+}
+
+function parseShortDateLog(raw) {
+  const text = toHalfWidth(String(raw || ""))
+    .replace(/\r/g, "")
+    .replace(/^体調ログ\s*/u, "")
+    .trim();
+  const dateRegex = /(\d{1,2})\/(\d{1,2})\s*(?:\([^)]*\)|（[^）]*）)?/g;
+  const matches = [...text.matchAll(dateRegex)];
+  if (!matches.length) return [];
+  const year = new Date().getFullYear();
+
+  return matches.map((match, index) => {
+    const start = match.index + match[0].length;
+    const end = index + 1 < matches.length ? matches[index + 1].index : text.length;
+    const body = text.slice(start, end).trim();
+    const timeText = extractLeadingTimeText(body);
+    const memo = removeLeadingTimeText(body).replace(/[（）]/g, "").trim() || "記録なし";
+    const date = new Date(year, Number(match[1]) - 1, Number(match[2]), csvTimeToHour(timeText), 0, 0, 0);
+    return {
+      id: `short-log-${date.toISOString()}-${index}`,
+      date: date.toISOString(),
+      text: memo,
+      weather: "",
+      tempHigh: null,
+      tempLow: null,
+      temperature: null,
+      scores: /記録なし/.test(memo) ? {} : extractScores(memo)
+    };
+  });
+}
+
+function extractLeadingTimeText(value) {
+  const match = String(value || "").trim().match(/^(朝|午前|昼|午後|夕方|夜|深夜)(?:[・、／/](朝|午前|昼|午後|夕方|夜|深夜))*/u);
+  return match ? match[0] : "";
+}
+
+function removeLeadingTimeText(value) {
+  return String(value || "").trim().replace(/^(朝|午前|昼|午後|夕方|夜|深夜)(?:[・、／/](朝|午前|昼|午後|夕方|夜|深夜))*\s*/u, "");
 }
 
 function parseHealthCsv(raw) {
@@ -758,7 +802,9 @@ function parseCsvDate(dateValue, timeValue) {
 
 function csvTimeToHour(value) {
   const text = String(value || "");
+  if (text.includes("深夜")) return 1;
   if (text.includes("朝")) return 8;
+  if (text.includes("午前")) return 10;
   if (text.includes("昼")) return 12;
   if (text.includes("午後")) return 15;
   if (text.includes("夕方")) return 17;
