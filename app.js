@@ -1,7 +1,7 @@
 const STORAGE_KEY = "healthVoiceLog.v1";
 const LABELS_KEY = "healthVoiceLog.labels.v1";
 const COUNT_KEY = "healthVoiceLog.symptomCount.v1";
-const APP_VERSION = "v4.7";
+const APP_VERSION = "v4.9";
 const defaultSymptoms = [
   { key: "headache", label: "頭痛", color: "#e60000", aliases: ["頭痛", "頭"] },
   { key: "back", label: "腰", color: "#0057ff", aliases: ["腰", "腰の痛み"] },
@@ -20,8 +20,9 @@ let symptomCount = loadSymptomCount();
 const fields = {
   date: document.querySelector("#entryDate"),
   weather: document.querySelector("#entryWeather"),
-  tempHigh: document.querySelector("#entryTempHigh"),
-  tempLow: document.querySelector("#entryTempLow"),
+  tempAverage: document.querySelector("#entryTempAverage"),
+  pressure: document.querySelector("#entryPressure"),
+  windSpeed: document.querySelector("#entryWindSpeed"),
   text: document.querySelector("#entryText"),
   importText: document.querySelector("#importText"),
   importFile: document.querySelector("#importFile"),
@@ -286,8 +287,9 @@ function saveEntry() {
     date: new Date(fields.date.value || Date.now()).toISOString(),
     text,
     weather: fields.weather.value.trim(),
-    tempHigh: fields.tempHigh.value === "" ? null : Number(fields.tempHigh.value),
-    tempLow: fields.tempLow.value === "" ? null : Number(fields.tempLow.value),
+    tempAverage: fields.tempAverage.value === "" ? null : Number(fields.tempAverage.value),
+    pressure: fields.pressure.value === "" ? null : Number(fields.pressure.value),
+    windSpeed: fields.windSpeed.value === "" ? null : Number(fields.windSpeed.value),
     scores
   };
   if (editingEntryId) {
@@ -508,7 +510,9 @@ async function fetchCurrentWeather() {
     fields.weather.value = summarizeDailyWeather(hourlyCodes) || weatherCodeToJapanese(dailyCode);
     fields.tempHigh.value = formatTemperature(data.daily && data.daily.temperature_2m_max ? data.daily.temperature_2m_max[0] : null);
     fields.tempLow.value = formatTemperature(data.daily && data.daily.temperature_2m_min ? data.daily.temperature_2m_min[0] : null);
-    setStatus("今日の天気と最高・最低気温を入れました。");
+    fields.pressure.value = formatTemperature(averageNumber(data.hourly && data.hourly.surface_pressure ? data.hourly.surface_pressure : []));
+    fields.windSpeed.value = formatTemperature(averageNumber(data.hourly && data.hourly.wind_speed_10m ? data.hourly.wind_speed_10m : []));
+    setStatus("今日の天気、気温、気圧、風速を入れました。");
   } catch (error) {
     setStatus(`天気を取得できませんでした。位置情報の許可、HTTPS、ネット接続を確認してください。${error && error.message ? ` (${error.message})` : ""}`);
   }
@@ -516,7 +520,7 @@ async function fetchCurrentWeather() {
 
 async function fetchWeatherForecast(latitude, longitude) {
   const params = `latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=Asia%2FTokyo`;
-  const detailedUrl = `https://api.open-meteo.com/v1/forecast?${params}&hourly=weather_code`;
+  const detailedUrl = `https://api.open-meteo.com/v1/forecast?${params}&hourly=weather_code,surface_pressure,wind_speed_10m`;
   try {
     const response = await fetch(detailedUrl, { cache: "no-store" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -602,6 +606,12 @@ function formatTemperature(value) {
   return Number.isFinite(value) ? String(Math.round(value * 10) / 10) : "";
 }
 
+function averageNumber(values) {
+  const numbers = values.map(Number).filter(Number.isFinite);
+  if (!numbers.length) return null;
+  return numbers.reduce((sum, value) => sum + value, 0) / numbers.length;
+}
+
 function importLog(raw) {
   const parsed = parseImportedData(raw);
   if (!parsed.length) {
@@ -617,6 +627,7 @@ function importLog(raw) {
 function parseImportedData(raw) {
   const text = String(raw || "").trim();
   if (looksLikeTableCsv(text)) return parseHealthCsv(text);
+  if (looksLikeWeatherMetricLog(text)) return parseWeatherMetricLog(text);
   if (looksLikeShortDateLog(text)) return parseShortDateLog(text);
   return parseLog(text);
 }
@@ -628,6 +639,10 @@ function looksLikeTableCsv(text) {
 
 function looksLikeShortDateLog(text) {
   return /(?:^|\s)\d{1,2}\/\d{1,2}\s*(?:\([^)]*\)|（[^）]*）)?/.test(toHalfWidth(text));
+}
+
+function looksLikeWeatherMetricLog(text) {
+  return /\d{4}年\d{1,2}月\d{1,2}日.*?(?:hPa|m\/s)/u.test(toHalfWidth(text));
 }
 
 function loadImportFile() {
@@ -665,10 +680,60 @@ function parseLog(raw) {
       text: memo,
       weather,
       temperature: tempMatch ? Number(tempMatch[1] || tempMatch[2]) : null,
+      pressure: null,
+      windSpeed: null,
       scores: extractScores(`${memo}\n${previous}`)
     });
   }
   return parsed;
+}
+
+function parseWeatherMetricLog(raw) {
+  const text = toHalfWidth(String(raw || ""))
+    .replace(/\r/g, "")
+    .replace(/，/g, ",")
+    .replace(/^体調ログ\s*/u, "")
+    .trim();
+  const dateRegex = /(\d{4})年(\d{1,2})月(\d{1,2})日[^\n,]*/g;
+  const matches = [...text.matchAll(dateRegex)];
+  if (!matches.length) return [];
+
+  return matches.map((match, index) => {
+    const start = match.index + match[0].length;
+    const end = index + 1 < matches.length ? matches[index + 1].index : text.length;
+    const body = text.slice(start, end).trim();
+    const lines = body.split("\n").map(line => line.trim()).filter(Boolean);
+    const metricLine = lines.shift() || "";
+    const metrics = parseWeatherMetricLine(metricLine);
+    const memo = lines.join("\n").trim() || "記録なし";
+    const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0, 0);
+    return {
+      id: `weather-metric-${date.toISOString()}-${index}`,
+      date: date.toISOString(),
+      text: memo,
+      weather: metrics.weather,
+      tempHigh: metrics.temperature,
+      tempLow: null,
+      temperature: metrics.temperature,
+      pressure: metrics.pressure,
+      windSpeed: metrics.windSpeed,
+      scores: /記録なし/.test(memo) ? {} : extractScores(memo)
+    };
+  });
+}
+
+function parseWeatherMetricLine(value) {
+  const parts = String(value || "").split(",").map(part => part.trim()).filter(Boolean);
+  const weather = parts.find(part => !/°C|℃|hPa|m\/s/i.test(part)) || "";
+  const tempMatch = value.match(/(-?\d+(?:\.\d+)?)\s*°?\s*C|(-?\d+(?:\.\d+)?)\s*℃/i);
+  const pressureMatch = value.match(/([\d,]+(?:\.\d+)?)\s*hPa/i);
+  const windMatch = value.match(/(-?\d+(?:\.\d+)?)\s*m\/s/i);
+  return {
+    weather,
+    temperature: tempMatch ? Number(tempMatch[1] || tempMatch[2]) : null,
+    pressure: pressureMatch ? Number(pressureMatch[1].replace(/,/g, "")) : null,
+    windSpeed: windMatch ? Number(windMatch[1]) : null
+  };
 }
 
 function parseShortDateLog(raw) {
@@ -696,6 +761,8 @@ function parseShortDateLog(raw) {
       tempHigh: null,
       tempLow: null,
       temperature: null,
+      pressure: null,
+      windSpeed: null,
       scores: /記録なし/.test(memo) ? {} : extractScores(memo)
     };
   });
@@ -753,6 +820,8 @@ function parseHealthCsv(raw) {
       tempHigh: weatherInfo.tempHigh,
       tempLow: weatherInfo.tempLow,
       temperature: weatherInfo.temperature,
+      pressure: weatherInfo.pressure,
+      windSpeed: weatherInfo.windSpeed,
       scores
     };
   });
@@ -817,7 +886,16 @@ function parseWeatherAndTemperature(value) {
   const tempMatch = toHalfWidth(text).match(/(-?\d+(?:\.\d+)?)\s*°?\s*C|(-?\d+(?:\.\d+)?)\s*℃/i);
   const temperature = tempMatch ? Number(tempMatch[1] || tempMatch[2]) : null;
   const weather = text.replace(/-?\d+(?:\.\d+)?\s*°?\s*C|-?\d+(?:\.\d+)?\s*℃/ig, "").replace(/[・、,\s]+$/u, "").trim();
-  return { weather, temperature, tempHigh: temperature, tempLow: null };
+  const pressureMatch = toHalfWidth(text).match(/([\d,]+(?:\.\d+)?)\s*hPa/i);
+  const windMatch = toHalfWidth(text).match(/(-?\d+(?:\.\d+)?)\s*m\/s/i);
+  return {
+    weather,
+    temperature,
+    tempHigh: temperature,
+    tempLow: null,
+    pressure: pressureMatch ? Number(pressureMatch[1].replace(/,/g, "")) : null,
+    windSpeed: windMatch ? Number(windMatch[1]) : null
+  };
 }
 
 function parseScoreCell(value) {
@@ -971,6 +1049,8 @@ function startEdit(id) {
   fields.weather.value = entry.weather || "";
   fields.tempHigh.value = entry.tempHigh ?? entry.temperature ?? "";
   fields.tempLow.value = entry.tempLow ?? "";
+  fields.pressure.value = entry.pressure ?? "";
+  fields.windSpeed.value = entry.windSpeed ?? "";
   fields.text.value = entry.text || "";
   Object.entries(scoreInputs).forEach(([key, input]) => {
     input.value = entry.scores && Number.isFinite(entry.scores[key]) ? entry.scores[key] : "";
@@ -992,6 +1072,8 @@ function resetEntryForm() {
   fields.weather.value = "";
   fields.tempHigh.value = "";
   fields.tempLow.value = "";
+  fields.pressure.value = "";
+  fields.windSpeed.value = "";
   Object.values(scoreInputs).forEach(input => input.value = "");
   fields.date.value = toLocalInputValue(new Date());
 }
@@ -1178,7 +1260,10 @@ function formatWeatherMeta(entry) {
   if (entry.tempHigh != null) temperatures.push(`最高${entry.tempHigh}°C`);
   if (entry.tempLow != null) temperatures.push(`最低${entry.tempLow}°C`);
   if (!temperatures.length && entry.temperature != null) temperatures.push(`${entry.temperature}°C`);
-  return [entry.weather, temperatures.join(" / ")].filter(Boolean).join(" ");
+  const metrics = [];
+  if (entry.pressure != null) metrics.push(`${entry.pressure} hPa`);
+  if (entry.windSpeed != null) metrics.push(`${entry.windSpeed} m/s`);
+  return [entry.weather, temperatures.join(" / "), metrics.join(" / ")].filter(Boolean).join(" ");
 }
 
 function scoreChips(scores, separator = "") {
@@ -1197,9 +1282,9 @@ function exportHistoryCsv() {
 }
 
 function downloadEntriesCsv(targetEntries, filename) {
-  const header = ["日時", "天気", "最高気温", "最低気温", ...activeSymptoms().map(s => s.label), "メモ"];
+  const header = ["日時", "天気", "最高気温", "最低気温", "気圧", "風速", ...activeSymptoms().map(s => s.label), "メモ"];
   const rows = targetEntries.map(entry => [
-    formatDate(entry.date), entry.weather, entry.tempHigh ?? entry.temperature ?? "", entry.tempLow ?? "",
+    formatDate(entry.date), entry.weather, entry.tempHigh ?? entry.temperature ?? "", entry.tempLow ?? "", entry.pressure ?? "", entry.windSpeed ?? "",
     ...activeSymptoms().map(symptom => entry.scores[symptom.key] ?? ""),
     entry.text
   ]);

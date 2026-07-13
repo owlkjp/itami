@@ -316,7 +316,7 @@ canvas {
 
 @media (min-width: 760px) {
   .score-grid { grid-template-columns: repeat(3, 1fr); }
-  .weather-row { grid-template-columns: 1fr 120px 120px auto; }
+  .weather-row { grid-template-columns: 1fr 120px 120px 120px auto; }
   .weather-row button { grid-column: auto; }
   .history-controls { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .settings-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
